@@ -773,9 +773,6 @@ plot_results.py
 - PyTorch Documentation: https://pytorch.org/docs/
 - IMDb Dataset: https://www.kaggle.com/datasets/lakshmi25npathi/imdb-dataset-of-50k-movie-reviews
 
-## 👤 Author
-
-HW3 Assignment - LSTM Sentiment Analysis
 
 ## 📄 License
 
