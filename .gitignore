@@ -18,17 +18,18 @@ ENV/
 *~
 
 # Data (keep structure, ignore large files)
-data/raw/*.csv
-data/processed/*.pkl
+# Note: Raw CSV and processed PKL files are large and can be regenerated
+# Uncomment the lines below if you want to ignore them:
+# data/raw/*.csv
+# data/processed/*.pkl
 
 # Models
 *.pth
 *.pt
 models/
 
-# Results (keep structure, but can ignore large outputs)
-results/plots/*
-!results/plots/.gitkeep
+# Results - now allowing plots to be tracked
+# results/plots/*  # Commented out to allow plots
 
 # OS
 .DS_Store

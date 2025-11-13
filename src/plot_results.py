@@ -3,6 +3,7 @@ Generate plots from experiment results.
 """
 
 import pandas as pd
+import numpy as np
 import matplotlib.pyplot as plt
 import os
 
@@ -218,6 +219,168 @@ def plot_metrics_vs_seq_len(df, output_dir='results/plots'):
         plt.close()
 
 
+def get_model_display_name(model_row):
+    """
+    Generate a descriptive model name from model parameters.
+    
+    Args:
+        model_row: Series or dict with model parameters
+        
+    Returns:
+        str: Descriptive model name
+    """
+    arch = model_row['architecture'].lower()
+    seq_len = int(model_row['seq_length'])
+    opt = model_row['optimizer'].upper()
+    activation = model_row.get('activation', 'N/A')
+    grad_clip = model_row.get('grad_clip', None)
+    
+    # Build architecture name
+    if arch == 'lstm':
+        arch_name = 'LSTM'
+    elif arch == 'bilstm':
+        arch_name = 'BiLSTM'
+    elif arch == 'rnn':
+        if activation and activation != 'N/A' and activation.lower() != 'none':
+            arch_name = f'RNN-{activation.capitalize()}'
+        else:
+            arch_name = 'RNN'
+    else:
+        arch_name = arch.upper()
+    
+    # Build full name
+    name_parts = [arch_name, f'L={seq_len}', opt]
+    
+    # Add gradient clipping if present
+    if grad_clip and not pd.isna(grad_clip) and grad_clip != 'None':
+        name_parts.append(f'Clip={grad_clip}')
+    
+    return ' '.join(name_parts)
+
+
+def plot_training_loss_curves(df, plots_dir='results/plots', output_dir='results/plots'):
+    """
+    Plot training loss vs epochs for the best and worst models.
+    
+    Args:
+        df: DataFrame with experiment metrics
+        plots_dir: Directory containing loss log files
+        output_dir: Directory to save the plot
+    """
+    os.makedirs(output_dir, exist_ok=True)
+    
+    # Identify best and worst models based on test_accuracy
+    best_model = df.loc[df['test_accuracy'].idxmax()]
+    worst_model = df.loc[df['test_accuracy'].idxmin()]
+    
+    best_exp_name = best_model['experiment']
+    worst_exp_name = worst_model['experiment']
+    
+    # Get descriptive model names
+    best_model_name = get_model_display_name(best_model)
+    worst_model_name = get_model_display_name(worst_model)
+    
+    print(f"\nBest model: {best_model_name} (Accuracy: {best_model['test_accuracy']:.4f}, F1: {best_model['test_f1']:.4f})")
+    print(f"Worst model: {worst_model_name} (Accuracy: {worst_model['test_accuracy']:.4f}, F1: {worst_model['test_f1']:.4f})")
+    
+    # Read loss log files
+    best_log_path = os.path.join(plots_dir, f'{best_exp_name}_loss_log.txt')
+    worst_log_path = os.path.join(plots_dir, f'{worst_exp_name}_loss_log.txt')
+    
+    if not os.path.exists(best_log_path):
+        print(f"Warning: Loss log not found for best model: {best_log_path}")
+        return
+    
+    if not os.path.exists(worst_log_path):
+        print(f"Warning: Loss log not found for worst model: {worst_log_path}")
+        return
+    
+    # Load loss logs
+    best_log = pd.read_csv(best_log_path)
+    worst_log = pd.read_csv(worst_log_path)
+    
+    # Create the plot
+    fig, ax = plt.subplots(figsize=(12, 7))
+    
+    # Plot training loss curves
+    epochs_best = best_log['Epoch'].values
+    train_loss_best = best_log['Train_Loss'].values
+    
+    epochs_worst = worst_log['Epoch'].values
+    train_loss_worst = worst_log['Train_Loss'].values
+    
+    # Plot with different styles
+    ax.plot(epochs_best, train_loss_best, 
+            marker='o', linewidth=2.5, markersize=8, 
+            label=f'Best: {best_model_name} (Acc: {best_model["test_accuracy"]:.3f})',
+            color='steelblue', alpha=0.8)
+    
+    ax.plot(epochs_worst, train_loss_worst, 
+            marker='s', linewidth=2.5, markersize=8, 
+            label=f'Worst: {worst_model_name} (Acc: {worst_model["test_accuracy"]:.3f})',
+            color='coral', alpha=0.8)
+    
+    # Add value annotations only for first and last epochs to avoid clutter
+    # Best model: annotate first (top) and last (bottom)
+    idx_first_best = 0
+    idx_last_best = len(epochs_best) - 1
+    
+    ax.annotate(f'Epoch {epochs_best[idx_first_best]}: {train_loss_best[idx_first_best]:.3f}',
+               (epochs_best[idx_first_best], train_loss_best[idx_first_best]),
+               textcoords="offset points", xytext=(15, 20), ha='left',
+               fontsize=9, color='steelblue', fontweight='bold',
+               bbox=dict(boxstyle='round,pad=0.3', facecolor='lightblue', alpha=0.7))
+    
+    ax.annotate(f'Epoch {epochs_best[idx_last_best]}: {train_loss_best[idx_last_best]:.3f}',
+               (epochs_best[idx_last_best], train_loss_best[idx_last_best]),
+               textcoords="offset points", xytext=(15, -25), ha='left',
+               fontsize=9, color='steelblue', fontweight='bold',
+               bbox=dict(boxstyle='round,pad=0.3', facecolor='lightblue', alpha=0.7))
+    
+    # Worst model: annotate first and last (both at bottom since loss is flat)
+    idx_first_worst = 0
+    idx_last_worst = len(epochs_worst) - 1
+    
+    ax.annotate(f'Epoch {epochs_worst[idx_first_worst]}: {train_loss_worst[idx_first_worst]:.3f}',
+               (epochs_worst[idx_first_worst], train_loss_worst[idx_first_worst]),
+               textcoords="offset points", xytext=(-15, -30), ha='right',
+               fontsize=9, color='coral', fontweight='bold',
+               bbox=dict(boxstyle='round,pad=0.3', facecolor='lightcoral', alpha=0.7))
+    
+    ax.annotate(f'Epoch {epochs_worst[idx_last_worst]}: {train_loss_worst[idx_last_worst]:.3f}',
+               (epochs_worst[idx_last_worst], train_loss_worst[idx_last_worst]),
+               textcoords="offset points", xytext=(-15, -15), ha='right',
+               fontsize=9, color='coral', fontweight='bold',
+               bbox=dict(boxstyle='round,pad=0.3', facecolor='lightcoral', alpha=0.7))
+    
+    # Styling
+    ax.set_xlabel('Epoch', fontsize=13, fontweight='bold')
+    ax.set_ylabel('Training Loss', fontsize=13, fontweight='bold')
+    ax.set_title('Training Loss vs. Epochs (Best vs Worst Models)', 
+                 fontsize=15, fontweight='bold', pad=20)
+    ax.legend(fontsize=11, loc='upper right', framealpha=0.9)
+    ax.grid(alpha=0.3, linestyle='--', linewidth=1.5)
+    ax.set_xticks(range(1, max(len(epochs_best), len(epochs_worst)) + 1))
+    
+    # Adjust y-axis to give more room for annotations
+    y_min = min(train_loss_best.min(), train_loss_worst.min())
+    y_max = max(train_loss_best.max(), train_loss_worst.max())
+    y_range = y_max - y_min
+    ax.set_ylim([y_min - 0.1 * y_range, y_max + 0.15 * y_range])
+    
+    # Add model details as text box in bottom left to avoid overlap
+    textstr = f'Best Model: {best_model_name}\nWorst Model: {worst_model_name}'
+    props = dict(boxstyle='round', facecolor='wheat', alpha=0.7, edgecolor='gray', linewidth=1)
+    ax.text(0.02, 0.02, textstr, transform=ax.transAxes, fontsize=9,
+            verticalalignment='bottom', bbox=props, family='monospace')
+    
+    plt.tight_layout()
+    output_path = os.path.join(output_dir, 'training_loss_curves.png')
+    plt.savefig(output_path, dpi=300, bbox_inches='tight')
+    print(f"Saved training loss curves plot to: {output_path}")
+    plt.close()
+
+
 def main():
     """Generate all plots."""
     import argparse
@@ -240,6 +403,7 @@ def main():
     print("\nGenerating plots...")
     plot_variant_comparison(df)
     plot_metrics_vs_seq_len(df)
+    plot_training_loss_curves(df)
     
     print("\nAll plots generated successfully!")
 
